@@ -9,13 +9,24 @@ Blast-only mode also requires at least one BLAST TSV input and uses only BLAST-d
 ## Installation
 
 ```bash
+conda env create -f environment.yml
+conda activate organelle-cleaner
 pip install -e .
 ```
+
+The current codebase requires Python 3.10+ syntax. BLAST itself is not required for installation or for the default `graph-only` mode. It is only needed externally if you want to generate BLAST TSV inputs for `hybrid` or `blast-only` runs.
 
 ## Usage
 
 ```bash
 organelle-cleaner assembly.gfa \
+  --output-dir results
+```
+
+You can also invoke the existing script entry point directly:
+
+```bash
+python organelle_cleaner.py assembly.gfa \
   --output-dir results
 ```
 
