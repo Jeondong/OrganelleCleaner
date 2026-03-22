@@ -1,13 +1,8 @@
-#!/usr/bin/env python3
-"""Regression tests for organelle_cleaner output consistency."""
-
 from __future__ import annotations
 
 import csv
 import subprocess
 import sys
-import tempfile
-import unittest
 from pathlib import Path
 
 
@@ -21,7 +16,27 @@ S\tnuclear_b\tATATATAT\tLN:i:8\tRC:i:8
 """
 
 
-def fasta_ids(path: Path) -> set[str]:
+def _run_pipeline(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(PIPELINE_PATH), *args],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _write_synthetic_gfa(tmp_path: Path) -> Path:
+    input_path = tmp_path / "synthetic.gfa"
+    input_path.write_text(SYNTHETIC_GFA, encoding="utf-8")
+    return input_path
+
+
+def _read_report(path: Path) -> list[dict[str, str]]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle, delimiter="\t"))
+
+
+def _read_fasta_ids(path: Path) -> set[str]:
     ids: set[str] = set()
     with path.open("r", encoding="utf-8") as handle:
         for line in handle:
@@ -30,64 +45,65 @@ def fasta_ids(path: Path) -> set[str]:
     return ids
 
 
-def contig_id_list(path: Path) -> set[str]:
+def _read_id_list(path: Path) -> set[str]:
     with path.open("r", encoding="utf-8") as handle:
         return {line.strip() for line in handle if line.strip()}
 
 
-def read_report(path: Path) -> list[dict[str, str]]:
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle, delimiter="\t"))
+def test_default_cli_invocation_succeeds_without_blast_and_keeps_outputs_consistent(tmp_path):
+    input_path = _write_synthetic_gfa(tmp_path)
+    output_dir = tmp_path / "out"
+
+    result = _run_pipeline(str(input_path), "--output-dir", str(output_dir))
+
+    assert result.returncode == 0, result.stderr
+    assert (output_dir / "report.tsv").exists()
+    assert (output_dir / "nuclear_contigs.txt").exists()
+    assert (output_dir / "cleaned_assembly.fa").exists()
+
+    report_rows = _read_report(output_dir / "report.tsv")
+    report_by_id = {row["contig_id"]: row for row in report_rows}
+    fasta_ids = _read_fasta_ids(output_dir / "cleaned_assembly.fa")
+    nuclear_ids = _read_id_list(output_dir / "nuclear_contigs.txt")
+
+    assert report_by_id["missing_seq"]["has_sequence"] == "False"
+    assert report_by_id["nuclear_a"]["mode"] == "graph-only"
+    assert fasta_ids == nuclear_ids
+    assert "missing_seq" not in fasta_ids
+    assert "missing_seq" not in nuclear_ids
 
 
-class OrganelleCleanerContractTests(unittest.TestCase):
-    def run_pipeline(self) -> tuple[Path, subprocess.CompletedProcess[str]]:
-        temp_dir = tempfile.TemporaryDirectory()
-        self.addCleanup(temp_dir.cleanup)
-        temp_path = Path(temp_dir.name)
-        input_path = temp_path / "synthetic.gfa"
-        output_dir = temp_path / "out"
-        input_path.write_text(SYNTHETIC_GFA, encoding="utf-8")
+def test_hybrid_and_blast_only_require_blast_inputs(tmp_path):
+    input_path = _write_synthetic_gfa(tmp_path)
 
-        result = subprocess.run(
-            [sys.executable, str(PIPELINE_PATH), str(input_path), "--output-dir", str(output_dir)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        return output_dir, result
+    hybrid_result = _run_pipeline(str(input_path), "--mode", "hybrid")
+    blast_only_result = _run_pipeline(str(input_path), "--mode", "blast-only")
 
-    def test_fasta_matches_nuclear_contig_ids(self) -> None:
-        output_dir, _ = self.run_pipeline()
-
-        self.assertEqual(
-            fasta_ids(output_dir / "cleaned_assembly.fa"),
-            contig_id_list(output_dir / "nuclear_contigs.txt"),
-        )
-
-    def test_missing_sequence_contig_is_reported_but_excluded_from_nuclear_outputs(self) -> None:
-        output_dir, _ = self.run_pipeline()
-        report_rows = {row["contig_id"]: row for row in read_report(output_dir / "report.tsv")}
-
-        self.assertIn("missing_seq", report_rows)
-        self.assertEqual(report_rows["missing_seq"]["has_sequence"], "False")
-        self.assertNotIn("missing_seq", fasta_ids(output_dir / "cleaned_assembly.fa"))
-        self.assertNotIn("missing_seq", contig_id_list(output_dir / "nuclear_contigs.txt"))
-
-    def test_all_nuclear_contigs_with_sequence_appear_in_fasta(self) -> None:
-        output_dir, _ = self.run_pipeline()
-        report_rows = read_report(output_dir / "report.tsv")
-        fasta_contigs = fasta_ids(output_dir / "cleaned_assembly.fa")
-
-        expected_ids = {
-            row["contig_id"]
-            for row in report_rows
-            if row["classification"] == "nuclear" and row["has_sequence"] == "True"
-        }
-
-        self.assertTrue(expected_ids)
-        self.assertTrue(expected_ids.issubset(fasta_contigs))
+    assert hybrid_result.returncode != 0
+    assert "requires at least one BLAST TSV input" in hybrid_result.stderr
+    assert blast_only_result.returncode != 0
+    assert "requires at least one BLAST TSV input" in blast_only_result.stderr
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_hybrid_invocation_succeeds_when_blast_input_is_provided(tmp_path):
+    input_path = _write_synthetic_gfa(tmp_path)
+    blast_tsv = tmp_path / "plastid.tsv"
+    blast_tsv.write_text(
+        "qseqid\tsseqid\tpident\tlength\tslen\tmismatch\tgapopen\tqstart\tqend\tsstart\tsend\n"
+        "plastid_ref\tnuclear_a\t99.0\t8\t8\t0\t0\t1\t8\t1\t8\n",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "hybrid_out"
+
+    result = _run_pipeline(
+        str(input_path),
+        "--mode",
+        "hybrid",
+        "--plastid-blast-tsv",
+        str(blast_tsv),
+        "--output-dir",
+        str(output_dir),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (output_dir / "report.tsv").exists()

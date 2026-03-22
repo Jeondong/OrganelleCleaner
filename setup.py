@@ -6,6 +6,7 @@ setup(
     py_modules=[
         "organelle_cleaner",
         "organelle_scoring",
+        "blast_features",
         "parse_gfa",
         "graph_analysis",
         "sequence_features",
