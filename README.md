@@ -1,4 +1,4 @@
-# Organelle Cleaner
+# OrganelleCleaner
 
 Detect organelle-derived contigs from GFA assemblies using graph-only, BLAST-only, or hybrid mode.
 
