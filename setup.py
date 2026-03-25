@@ -1,22 +1,15 @@
-from setuptools import setup
+from setuptools import find_packages, setup
 
 setup(
-    name="organelle-cleaner",
+    name="OrganelleCleaner",
     version="0.1.0",
-    py_modules=[
-        "organelle_cleaner",
-        "organelle_scoring",
-        "blast_features",
-        "parse_gfa",
-        "graph_analysis",
-        "sequence_features",
-    ],
+    packages=find_packages(),
     install_requires=[
         "networkx",
     ],
     entry_points={
         "console_scripts": [
-            "organelle-cleaner=organelle_cleaner:main",
+            "organelle-cleaner=organelle_cleaner.cli:main",
         ],
     },
 )

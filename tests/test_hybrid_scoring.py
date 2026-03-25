@@ -1,9 +1,4 @@
-from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from organelle_scoring import (
+from organelle_cleaner.organelle_scoring import (
     BLAST_SUPPORT_NONE,
     HIGH_CONFIDENCE,
     MEDIUM_CONFIDENCE,

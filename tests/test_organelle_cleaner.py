@@ -7,7 +7,6 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PIPELINE_PATH = REPO_ROOT / "organelle_cleaner.py"
 
 SYNTHETIC_GFA = """\
 S\tmissing_seq\t*\tLN:i:10
@@ -18,7 +17,7 @@ S\tnuclear_b\tATATATAT\tLN:i:8\tRC:i:8
 
 def _run_pipeline(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(PIPELINE_PATH), *args],
+        [sys.executable, "-m", "organelle_cleaner.cli", *args],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -80,30 +79,44 @@ def test_hybrid_and_blast_only_require_blast_inputs(tmp_path):
     blast_only_result = _run_pipeline(str(input_path), "--mode", "blast-only")
 
     assert hybrid_result.returncode != 0
-    assert "requires at least one BLAST TSV input" in hybrid_result.stderr
+    assert "requires at least one organelle FASTA input" in hybrid_result.stderr
     assert blast_only_result.returncode != 0
-    assert "requires at least one BLAST TSV input" in blast_only_result.stderr
+    assert "requires at least one organelle FASTA input" in blast_only_result.stderr
 
 
-def test_hybrid_invocation_succeeds_when_blast_input_is_provided(tmp_path):
+def test_organelle_fasta_requires_assembly_fasta(tmp_path):
     input_path = _write_synthetic_gfa(tmp_path)
-    blast_tsv = tmp_path / "plastid.tsv"
-    blast_tsv.write_text(
-        "qseqid\tsseqid\tpident\tlength\tslen\tmismatch\tgapopen\tqstart\tqend\tsstart\tsend\n"
-        "plastid_ref\tnuclear_a\t99.0\t8\t8\t0\t0\t1\t8\t1\t8\n",
-        encoding="utf-8",
-    )
-    output_dir = tmp_path / "hybrid_out"
+    plastid_fasta = tmp_path / "plastid.fa"
+    plastid_fasta.write_text(">plastid_ref\nACGTACGT\n", encoding="utf-8")
 
     result = _run_pipeline(
         str(input_path),
         "--mode",
         "hybrid",
-        "--plastid-blast-tsv",
-        str(blast_tsv),
+        "--plastid-fasta",
+        str(plastid_fasta),
+    )
+
+    assert result.returncode != 0
+    assert "--assembly-fasta is required whenever --plastid-fasta or --mit-fasta is used" in result.stderr
+
+
+def test_graph_only_ignores_organelle_fasta_without_requiring_internal_blast(tmp_path):
+    input_path = _write_synthetic_gfa(tmp_path)
+    plastid_fasta = tmp_path / "plastid.fa"
+    plastid_fasta.write_text(">plastid_ref\nACGTACGT\n", encoding="utf-8")
+    output_dir = tmp_path / "graph_only_out"
+
+    result = _run_pipeline(
+        str(input_path),
+        "--mode",
+        "graph-only",
+        "--plastid-fasta",
+        str(plastid_fasta),
         "--output-dir",
         str(output_dir),
     )
 
     assert result.returncode == 0, result.stderr
     assert (output_dir / "report.tsv").exists()
+    assert not (output_dir / "blast_intermediates").exists()

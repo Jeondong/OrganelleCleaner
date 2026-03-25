@@ -10,7 +10,7 @@ from pathlib import Path
 
 import networkx as nx
 
-from parse_gfa import parse_gfa
+from .parse_gfa import parse_gfa
 
 
 def _sorted_components(graph: nx.MultiDiGraph) -> list[set[str]]:
