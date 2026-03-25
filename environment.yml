@@ -1,7 +1,8 @@
-name: organelle-cleaner
+name: OrganelleCleaner
 channels:
   - conda-forge
 dependencies:
   - python=3.11
   - pip
   - networkx
+  - blast

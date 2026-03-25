@@ -1,3 +1,14 @@
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "OrganelleCleaner"
+version = "0.1.0"
+dependencies = ["networkx"]
+
+[project.scripts]
+organelle-cleaner = "organelle_cleaner.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["organelle_cleaner*"]

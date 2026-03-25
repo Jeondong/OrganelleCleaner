@@ -14,16 +14,16 @@ from typing import Iterable
 
 import networkx as nx
 
-from blast_features import (
+from .blast_features import (
     BLAST_SUPPORT_MODERATE,
     BLAST_SUPPORT_NONE,
     BLAST_SUPPORT_STRONG,
     BlastThresholdConfig,
     load_blast_support_by_contig,
 )
-from graph_analysis import summarize_contigs
-from parse_gfa import parse_gfa
-from sequence_features import calculate_contig_features, estimate_nuclear_coverage
+from .graph_analysis import summarize_contigs
+from .parse_gfa import parse_gfa
+from .sequence_features import calculate_contig_features, estimate_nuclear_coverage
 
 
 ScoreRow = dict[str, object]
@@ -921,146 +921,153 @@ def write_score_table(rows: Iterable[ScoreRow]) -> None:
         )
 
 
-def add_scoring_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
+def add_scoring_arguments(
+    parser: argparse.ArgumentParser,
+    *,
+    mode_group: argparse._ArgumentGroup | None = None,
+    blast_group: argparse._ArgumentGroup | None = None,
+    advanced_group: argparse._ArgumentGroup | None = None,
+) -> None:
+    mode_arguments = mode_group or parser
+    blast_arguments = blast_group or parser
+    advanced_arguments = advanced_group or parser
+
+    mode_arguments.add_argument(
         "--mode",
         choices=VALID_MODES,
         default=MODE_GRAPH_ONLY,
         help=(
-            "Analysis mode. graph-only remains the default for backward-compatible CLI behavior. hybrid is the recommended mode for practical use and benchmarking when BLAST inputs are available, "
-            "and requires at least one BLAST TSV input. blast-only also requires at least one BLAST TSV input and uses only BLAST-derived scoring, "
-            "but the current CLI still uses the GFA as the contig inventory/input source."
+            "Analysis mode: graph-only is the default; hybrid is usually the best practical choice when organelle FASTA inputs are available; blast-only uses only BLAST-derived scoring."
         ),
     )
-    parser.add_argument(
-        "--plastid-blast-tsv",
-        "--chl-blast-tsv",
-        dest="plastid_blast_tsv",
+    blast_arguments.add_argument(
+        "--plastid-fasta",
+        dest="plastid_fasta",
         type=Path,
         default=None,
-        help="BLAST tabular hits against plastid/chloroplast references",
+        help="Plastid or chloroplast reference FASTA for internal BLAST.",
     )
-    parser.add_argument(
-        "--mit-blast-tsv",
+    blast_arguments.add_argument(
+        "--mit-fasta",
         type=Path,
         default=None,
-        help="BLAST tabular hits against mitochondrial references",
+        help="Mitochondrial reference FASTA for internal BLAST.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--nuclear-coverage",
         type=float,
         default=None,
-        help="Override the nuclear coverage baseline",
+        help="Override the inferred nuclear coverage baseline.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--gc-baseline",
         type=float,
         default=None,
-        help="Override the GC baseline percentage",
+        help="Override the inferred GC baseline percentage.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--high-confidence-threshold",
         "--organelle-threshold",
         dest="high_confidence_threshold",
         type=int,
         default=DEFAULT_HIGH_CONFIDENCE_THRESHOLD,
-        help="Minimum graph score required for high-confidence graph calls",
+        help="Minimum graph score for a high-confidence graph call.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--medium-confidence-threshold",
         type=int,
         default=DEFAULT_MEDIUM_CONFIDENCE_THRESHOLD,
-        help="Minimum graph score required for medium-confidence graph calls",
+        help="Minimum graph score for a medium-confidence graph call.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--low-confidence-threshold",
         type=int,
         default=DEFAULT_LOW_CONFIDENCE_THRESHOLD,
-        help="Minimum graph score required for low-confidence graph calls",
+        help="Minimum graph score for a low-confidence graph call.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--very-small-max-length",
         type=int,
         default=DEFAULT_VERY_SMALL_MAX,
-        help="Upper bound for the very-small contig bin",
+        help="Upper bound for the very-small contig bin.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--small-fragment-max-length",
         type=int,
         default=DEFAULT_SMALL_FRAGMENT_MAX,
-        help="Upper bound for the small-fragment contig bin",
+        help="Upper bound for the small-fragment contig bin.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--min-organelle-length",
         type=int,
         default=DEFAULT_MIN_ORGANELLE_LENGTH,
-        help="Lower bound of the preferred-range bin and start of graph-positive length support",
+        help="Lower bound of the preferred-size range.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--preferred-max-length",
         type=int,
         default=DEFAULT_PREFERRED_MAX_LENGTH,
-        help="Upper bound of the preferred-range bin",
+        help="Upper bound of the preferred-size range.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--intermediate-max-length",
         type=int,
         default=DEFAULT_INTERMEDIATE_MAX,
-        help="Upper bound of the intermediate-size bin",
+        help="Upper bound of the intermediate-size bin.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--large-contig-length",
         type=int,
         default=DEFAULT_LARGE_CONTIG_LENGTH,
-        help="Lower bound of the large-contig bin",
+        help="Lower bound of the large-contig bin.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--very-large-contig-length",
         type=int,
         default=DEFAULT_VERY_LARGE_CONTIG_LENGTH,
-        help="Lower bound of the very-large-contig bin",
+        help="Lower bound of the very-large-contig bin.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--isolated-length-cap",
         type=int,
         default=DEFAULT_ISOLATED_LENGTH_CAP,
-        help="Maximum contig length for isolated singleton status to count as positive graph evidence",
+        help="Maximum length for isolated singleton status to count as positive graph evidence.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--large-contig-penalty",
         type=int,
         default=DEFAULT_LARGE_CONTIG_PENALTY,
-        help="Penalty applied once a contig exceeds --large-contig-length",
+        help="Penalty applied once a contig exceeds --large-contig-length.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--very-large-contig-penalty",
         type=int,
         default=DEFAULT_VERY_LARGE_CONTIG_PENALTY,
-        help="Additional penalty applied once a contig exceeds --very-large-contig-length",
+        help="Additional penalty applied once a contig exceeds --very-large-contig-length.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--large-contig-high-min-signals",
         type=int,
         default=DEFAULT_LARGE_CONTIG_HIGH_MIN_SIGNALS,
-        help="Minimum supporting graph signals required for large contigs to reach high confidence",
+        help="Minimum graph signals for large contigs to reach high confidence.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--large-contig-medium-min-signals",
         type=int,
         default=DEFAULT_LARGE_CONTIG_MEDIUM_MIN_SIGNALS,
-        help="Minimum supporting graph signals required for large contigs to reach medium confidence",
+        help="Minimum graph signals for large contigs to reach medium confidence.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--gc-deviation-threshold",
         type=float,
         default=DEFAULT_GC_DEVIATION_THRESHOLD,
-        help="Minimum absolute GC deviation from baseline required for positive graph evidence",
+        help="Minimum GC deviation from baseline required for positive graph evidence.",
     )
-    parser.add_argument(
+    advanced_arguments.add_argument(
         "--coverage-multiplier-threshold",
         type=float,
         default=DEFAULT_COVERAGE_MULTIPLIER_THRESHOLD,
-        help="Coverage multiplier over the nuclear baseline required for positive graph evidence",
+        help="Coverage multiplier over the nuclear baseline required for positive graph evidence.",
     )
 
 
@@ -1130,10 +1137,14 @@ def config_from_args(
         fail("GC deviation threshold must be a finite non-negative value")
     if _normalize_nuclear_coverage_baseline(args.coverage_multiplier_threshold) is None:
         fail("Coverage multiplier threshold must be a finite positive value")
-    if args.mode in {MODE_HYBRID, MODE_BLAST_ONLY} and args.plastid_blast_tsv is None and args.mit_blast_tsv is None:
+    has_organelle_fasta = args.plastid_fasta is not None or args.mit_fasta is not None
+    internal_blast_requested = args.mode in {MODE_HYBRID, MODE_BLAST_ONLY}
+    if internal_blast_requested and not has_organelle_fasta:
         fail(
-            f"{args.mode} mode requires at least one BLAST TSV input via --plastid-blast-tsv/--chl-blast-tsv or --mit-blast-tsv"
+            f"{args.mode} mode requires at least one organelle FASTA input via --plastid-fasta or --mit-fasta"
         )
+    if internal_blast_requested and args.assembly_fasta is None:
+        fail("--assembly-fasta is required whenever --plastid-fasta or --mit-fasta is used")
 
     config = ScoringConfig(
         high_confidence_threshold=args.high_confidence_threshold,
@@ -1162,6 +1173,12 @@ def build_parser() -> argparse.ArgumentParser:
         description="Score GFA contigs for graph-only, BLAST-only, or hybrid organelle-like evidence. graph-only remains the default CLI mode for backward compatibility."
     )
     parser.add_argument("input_gfa", type=Path, help="Path to the input GFA file")
+    parser.add_argument(
+        "--assembly-fasta",
+        type=Path,
+        default=None,
+        help="Assembly FASTA required when internal BLAST needs sequence access.",
+    )
     add_scoring_arguments(parser)
     return parser
 

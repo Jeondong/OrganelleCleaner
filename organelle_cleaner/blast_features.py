@@ -21,8 +21,10 @@ BLAST_SOURCE_MITOCHONDRIAL = "mitochondrial"
 class BlastThresholdConfig:
     strong_identity: float = 98.0
     strong_aligned_fraction: float = 0.8
-    moderate_identity: float = 95.0
-    moderate_aligned_fraction: float = 0.5
+    # The minimum default BLAST support cutoff is 90% identity over 80% of the
+    # subject contig. Strong and exceptional tiers remain stricter overlays.
+    moderate_identity: float = 90.0
+    moderate_aligned_fraction: float = 0.8
     exceptional_identity: float = 99.0
     exceptional_aligned_fraction: float = 0.95
 

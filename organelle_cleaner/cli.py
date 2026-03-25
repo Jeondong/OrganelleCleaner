@@ -9,16 +9,17 @@ from multiprocessing import Pool
 import sys
 from pathlib import Path
 
-from blast_features import load_blast_support_by_contig
-from graph_analysis import summarize_contigs
-from organelle_scoring import (
+from .blast_features import load_blast_support_by_contig
+from .graph_analysis import summarize_contigs
+from .internal_blast import run_internal_blast
+from .organelle_scoring import (
     HIGH_CONFIDENCE,
     add_scoring_arguments,
     config_from_args,
     score_contigs,
 )
-from parse_gfa import parse_gfa
-from sequence_features import calculate_contig_features, read_fasta
+from .parse_gfa import parse_gfa
+from .sequence_features import calculate_contig_features, read_fasta
 
 
 REPORT_NAME = "report.tsv"
@@ -33,6 +34,13 @@ _ROW_BUILD_CONTEXT: tuple[
     dict[str, dict[str, object]],
     dict[str, dict[str, object]],
 ] | None = None
+
+
+class CliHelpFormatter(
+    argparse.ArgumentDefaultsHelpFormatter,
+    argparse.RawDescriptionHelpFormatter,
+):
+    """Formatter that keeps examples readable and shows defaults."""
 
 
 def write_contig_id_list(path: Path, contig_ids: list[str]) -> None:
@@ -263,50 +271,75 @@ def build_pipeline_rows(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        formatter_class=CliHelpFormatter,
+        usage=(
+            "%(prog)s input_gfa [-o OUTPUT_DIR] [--assembly-fasta ASSEMBLY_FASTA] "
+            "[--mode {graph-only,hybrid,blast-only}] [--plastid-fasta PLASTID_FASTA] "
+            "[--mit-fasta MIT_FASTA] [--threads THREADS]"
+        ),
         description=(
-            "Detect organelle contamination from a GFA assembly using graph-only, BLAST-only, or hybrid mode. "
-            "graph-only remains the default for backward-compatible CLI behavior. Hybrid and blast-only require at least one BLAST TSV input. blast-only uses BLAST-only scoring, "
-            "but this CLI still uses the GFA as the contig inventory/input source."
-        )
+            "Detect organelle-derived contigs from a GFA assembly.\n\n"
+            "graph-only is the default mode and works without BLAST inputs.\n"
+            "hybrid is generally the recommended practical mode when organelle FASTA inputs are available.\n"
+            "Most users only need the basic input, output, mode, and optional organelle FASTA inputs.\n"
+            "Advanced scoring and threshold parameters are optional and usually do not need adjustment."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  organelle-cleaner assembly.gfa --output-dir results\n"
+            "  organelle-cleaner assembly.gfa --assembly-fasta assembly.fa --mode hybrid --plastid-fasta plastid.fa --mit-fasta mit.fa --output-dir results"
+        ),
     )
-    parser.add_argument(
+
+    required_group = parser.add_argument_group("Required Input")
+    basic_io_group = parser.add_argument_group("Basic I/O")
+    mode_group = parser.add_argument_group("Run Mode")
+    blast_group = parser.add_argument_group("BLAST Inputs")
+    performance_group = parser.add_argument_group("Performance")
+    advanced_group = parser.add_argument_group(
+        "Advanced Scoring / Tuning Parameters (Optional Expert Settings)"
+    )
+
+    required_group.add_argument(
         "input_gfa",
         type=Path,
-        help="Path to the input assembly GFA used as the contig inventory/input source for all modes",
+        help="Input assembly GFA.",
     )
-    parser.add_argument(
+    basic_io_group.add_argument(
         "--assembly-fasta",
         type=Path,
         default=None,
-        help="Optional assembly FASTA used to supply sequences when the GFA does not contain them",
+        help="Assembly FASTA used for sequence recovery and required for internal BLAST database creation.",
     )
-    parser.add_argument(
+    basic_io_group.add_argument(
         "-o",
         "--output-dir",
         dest="output_dir",
         type=Path,
         default=Path("."),
-        help=(
-            "Directory where the pipeline will write organelle_contigs.txt, "
-            "nuclear_contigs.txt, cleaned_assembly.fa, and report.tsv"
-        ),
+        help="Output directory for reports and FASTA files.",
     )
-    parser.add_argument(
-        "--threads",
-        type=int,
-        default=1,
-        help="number of worker processes",
-    )
-    parser.add_argument(
+    basic_io_group.add_argument(
         "--all-candidates-name",
         type=str,
         default=None,
         help=(
-            "Optional TSV filename, relative to --output-dir, containing only high/medium/low-confidence candidates. "
-            f"Use {DEFAULT_CANDIDATE_REPORT_NAME!r} for the recommended name."
+            "Optional TSV filename, relative to --output-dir, for all flagged candidates. "
+            f"Recommended: {DEFAULT_CANDIDATE_REPORT_NAME!r}."
         ),
     )
-    add_scoring_arguments(parser)
+    performance_group.add_argument(
+        "--threads",
+        type=int,
+        default=1,
+        help="Number of worker processes and the exact thread count used for internal blastn.",
+    )
+    add_scoring_arguments(
+        parser,
+        mode_group=mode_group,
+        blast_group=blast_group,
+        advanced_group=advanced_group,
+    )
     return parser
 
 
@@ -336,13 +369,31 @@ def main() -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
+    output_dir = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     try:
         contigs, graph = parse_gfa(args.input_gfa)
         if args.assembly_fasta is not None:
             merge_fasta_sequences(contigs, read_fasta(args.assembly_fasta))
+        plastid_blast_tsv = None
+        mit_blast_tsv = None
+        if args.mode in {"hybrid", "blast-only"} and (
+            args.plastid_fasta is not None or args.mit_fasta is not None
+        ):
+            # Internal BLAST preserves the existing TSV-driven support code path.
+            internal_blast_outputs = run_internal_blast(
+                assembly_fasta=args.assembly_fasta,
+                plastid_fasta=args.plastid_fasta,
+                mit_fasta=args.mit_fasta,
+                output_dir=output_dir,
+                threads=args.threads,
+            )
+            plastid_blast_tsv = internal_blast_outputs.plastid_tsv
+            mit_blast_tsv = internal_blast_outputs.mit_tsv
         blast_support_by_contig = load_blast_support_by_contig(
-            plastid_blast_tsv=args.plastid_blast_tsv,
-            mit_blast_tsv=args.mit_blast_tsv,
+            plastid_blast_tsv=plastid_blast_tsv,
+            mit_blast_tsv=mit_blast_tsv,
             config=blast_config,
         )
     except FileNotFoundError:
@@ -351,9 +402,6 @@ def main() -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-
-    output_dir = args.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         report_rows = build_pipeline_rows(

@@ -1,4 +1,4 @@
-from organelle_scoring import (
+from organelle_cleaner.organelle_scoring import (
     SIZE_BIN_INTERMEDIATE,
     SIZE_BIN_LARGE,
     ScoringConfig,
