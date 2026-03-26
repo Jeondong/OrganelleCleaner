@@ -40,7 +40,6 @@ At a high level, the tool:
 Typical inputs:
 
 - required: assembly graph (`.gfa`)
-- optional but often useful: assembly FASTA
 - optional for BLAST-supported modes:
   - plastid / chloroplast reference FASTA
   - mitochondrial reference FASTA
@@ -51,7 +50,6 @@ Main outputs:
 - `organelle_contigs.txt`
 - `nuclear_contigs.txt`
 - `report.tsv`
-- `blast_intermediates/` when internal BLAST is used
 
 ## When to Use Each Mode
 
@@ -88,7 +86,7 @@ Cons:
 Uses:
 
 - graph-based evidence
-- optional internal BLAST evidence against plastid and/or mitochondrial references
+- internal BLAST evidence against plastid and/or mitochondrial references
 
 Choose this when:
 
@@ -98,7 +96,6 @@ Choose this when:
 Requirements:
 
 - GFA required
-- assembly FASTA required when BLAST is used
 - at least one of `--plastid-fasta` or `--mit-fasta`
 
 Pros:
@@ -144,9 +141,10 @@ Cons:
 
 ### Optional but often useful
 
-- `--assembly-fasta`
+- organelle reference FASTA via `--plastid-fasta` and/or `--mit-fasta`
 
-This is used to recover sequence information when the GFA does not contain contig sequences. It is also required when internal BLAST is requested.
+Advanced fallback note:
+If the GFA does not contain usable contig sequences, you can still provide `--assembly-fasta`. Most users do not need this because GFA sequence content can be used directly for internal BLAST subject preparation.
 
 ### Optional organelle reference FASTA inputs
 
@@ -163,7 +161,7 @@ Important workflow rule:
 
 - `graph-only` does not require BLAST and does not require organelle FASTA input
 - `hybrid` and `blast-only` fail only if neither `--plastid-fasta` nor `--mit-fasta` is provided
-- `--assembly-fasta` is required only when internal BLAST is actually used
+- when the GFA contains contig sequences, internal BLAST can use them directly as the assembly subject source
 
 ## Recommended Organelle Reference Generation
 
@@ -186,7 +184,7 @@ At a user level, the pipeline is:
    It summarizes graph structure and sequence-derived features such as contig length, GC content, and coverage.
 
 3. Optionally run internal BLAST.
-   If plastid and/or mitochondrial FASTA references are provided in `hybrid` or `blast-only` mode, Organelle Cleaner builds a BLAST nucleotide database from the assembly FASTA and runs `blastn` internally.
+   If plastid and/or mitochondrial FASTA references are provided in `hybrid` or `blast-only` mode, Organelle Cleaner builds a BLAST nucleotide database from the available assembly contig sequences and runs `blastn` internally. It uses GFA sequence content when available and falls back to `--assembly-fasta` only when needed.
 
 4. Classify BLAST support.
    BLAST hits are summarized per assembly contig, with overlapping or split HSPs merged on the subject contig before support coverage is measured.
@@ -228,7 +226,6 @@ organelle-cleaner assembly.gfa \
 
 ```bash
 organelle-cleaner assembly.gfa \
-  --assembly-fasta assembly.fa \
   --plastid-fasta plastid_refs.fa \
   --mode hybrid \
   --output-dir hybrid_plastid_results \
@@ -239,7 +236,6 @@ organelle-cleaner assembly.gfa \
 
 ```bash
 organelle-cleaner assembly.gfa \
-  --assembly-fasta PI652213.primary.fasta \
   --plastid-fasta PI652213_chl.fa \
   --mit-fasta PI652213_mit.fa \
   --mode hybrid \
@@ -251,12 +247,14 @@ organelle-cleaner assembly.gfa \
 
 ```bash
 organelle-cleaner assembly.gfa \
-  --assembly-fasta assembly.fa \
   --plastid-fasta plastid_refs.fa \
   --mode blast-only \
   --output-dir blast_only_results \
   --threads 8
 ```
+
+Advanced fallback note:
+If your GFA does not include usable contig sequences, you can still provide `--assembly-fasta` explicitly. If you need a separate candidate-only report file, `--all-candidates-name` remains available as an advanced option.
 
 ## Outputs
 
@@ -274,8 +272,8 @@ Main output files:
 - `report.tsv`
   Per-contig summary table with graph features, sequence features, BLAST support summaries, scores, and final classification.
 
-- `blast_intermediates/`
-  Created only when internal BLAST is used. Contains the temporary BLAST database and generated BLAST TSV outputs.
+- candidate report specified by `--all-candidates-name`
+  Per-contig report for all contigs flagged at any non-default confidence tier. This is written only when `--all-candidates-name` is provided, using the filename you supply.
 
 ### `report.tsv`: useful columns
 
