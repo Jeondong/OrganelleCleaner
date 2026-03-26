@@ -937,7 +937,7 @@ def add_scoring_arguments(
         choices=VALID_MODES,
         default=MODE_GRAPH_ONLY,
         help=(
-            "Analysis mode: graph-only is the default; hybrid is usually the best practical choice when organelle FASTA inputs are available; blast-only uses only BLAST-derived scoring."
+            "Analysis mode: graph-only uses graph evidence only and is the default; hybrid combines graph evidence with BLAST TSV support; blast-only uses BLAST TSV support only."
         ),
     )
     blast_arguments.add_argument(
@@ -945,13 +945,13 @@ def add_scoring_arguments(
         dest="plastid_fasta",
         type=Path,
         default=None,
-        help="Plastid or chloroplast reference FASTA for internal BLAST.",
+        help="Plastid or chloroplast reference FASTA used to validate legacy BLAST TSV input requirements.",
     )
     blast_arguments.add_argument(
         "--mit-fasta",
         type=Path,
         default=None,
-        help="Mitochondrial reference FASTA for internal BLAST.",
+        help="Mitochondrial reference FASTA used to validate legacy BLAST TSV input requirements.",
     )
     advanced_arguments.add_argument(
         "--nuclear-coverage",
@@ -1143,8 +1143,6 @@ def config_from_args(
         fail(
             f"{args.mode} mode requires at least one organelle FASTA input via --plastid-fasta or --mit-fasta"
         )
-    if internal_blast_requested and args.assembly_fasta is None:
-        fail("--assembly-fasta is required whenever --plastid-fasta or --mit-fasta is used")
 
     config = ScoringConfig(
         high_confidence_threshold=args.high_confidence_threshold,
@@ -1192,6 +1190,10 @@ def _run_self_checks() -> None:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+    if args.mode in {MODE_HYBRID, MODE_BLAST_ONLY} and (
+        args.plastid_fasta is not None or args.mit_fasta is not None
+    ) and args.assembly_fasta is None:
+        parser.error("--assembly-fasta is required whenever --plastid-fasta or --mit-fasta is used")
 
     try:
         config, blast_config, nuclear_coverage, gc_baseline = config_from_args(args, parser)

@@ -235,7 +235,10 @@ def build_pipeline_rows(
 ) -> list[dict[str, object]]:
     feature_rows = calculate_contig_features(contigs)
     feature_by_contig = {str(row["contig_id"]): row for row in feature_rows}
-    topology_rows = summarize_contigs(graph)
+    if graph is None:
+        topology_rows = []
+    else:
+        topology_rows = summarize_contigs(graph)
     topology_by_contig = {str(row["contig_id"]): row for row in topology_rows}
     scoring_rows = score_contigs(
         contigs,
@@ -273,21 +276,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         formatter_class=CliHelpFormatter,
         usage=(
-            "%(prog)s input_gfa [-o OUTPUT_DIR] [--assembly-fasta ASSEMBLY_FASTA] "
+            "%(prog)s [input_gfa] [-o OUTPUT_DIR] "
             "[--mode {graph-only,hybrid,blast-only}] [--plastid-fasta PLASTID_FASTA] "
             "[--mit-fasta MIT_FASTA] [--threads THREADS]"
         ),
         description=(
             "Detect organelle-derived contigs from a GFA assembly.\n\n"
-            "graph-only is the default mode and works without BLAST inputs.\n"
-            "hybrid is generally the recommended practical mode when organelle FASTA inputs are available.\n"
+            "graph-only uses graph evidence only and is the default mode.\n"
+            "hybrid combines graph evidence with organelle FASTA-based internal BLAST evidence.\n"
+            "blast-only uses organelle FASTA-based internal BLAST evidence only.\n"
             "Most users only need the basic input, output, mode, and optional organelle FASTA inputs.\n"
             "Advanced scoring and threshold parameters are optional and usually do not need adjustment."
         ),
         epilog=(
             "Examples:\n"
             "  organelle-cleaner assembly.gfa --output-dir results\n"
-            "  organelle-cleaner assembly.gfa --assembly-fasta assembly.fa --mode hybrid --plastid-fasta plastid.fa --mit-fasta mit.fa --output-dir results"
+            "  organelle-cleaner assembly.gfa --mode hybrid --plastid-fasta plastid.fa --mit-fasta mit.fa --output-dir results\n"
+            "  organelle-cleaner assembly.gfa --mode blast-only --plastid-fasta plastid.fa --output-dir results"
         ),
     )
 
@@ -302,14 +307,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     required_group.add_argument(
         "input_gfa",
+        nargs="?",
         type=Path,
-        help="Input assembly GFA.",
+        help="Input assembly GFA. Required for graph-only and hybrid; normally provided for blast-only as well.",
     )
     basic_io_group.add_argument(
         "--assembly-fasta",
         type=Path,
         default=None,
-        help="Assembly FASTA used for sequence recovery and required for internal BLAST database creation.",
+        help=argparse.SUPPRESS,
     )
     basic_io_group.add_argument(
         "-o",
@@ -323,10 +329,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--all-candidates-name",
         type=str,
         default=None,
-        help=(
-            "Optional TSV filename, relative to --output-dir, for all flagged candidates. "
-            f"Recommended: {DEFAULT_CANDIDATE_REPORT_NAME!r}."
-        ),
+        help=argparse.SUPPRESS,
     )
     performance_group.add_argument(
         "--threads",
@@ -343,12 +346,35 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _validate_cli_inputs(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+) -> None:
+    has_organelle_fasta = args.plastid_fasta is not None or args.mit_fasta is not None
+    has_contig_source = args.input_gfa is not None or args.assembly_fasta is not None
+
+    if args.mode == "graph-only" and args.input_gfa is None:
+        parser.error("graph-only mode requires input_gfa")
+    if args.mode == "hybrid" and args.input_gfa is None:
+        parser.error("hybrid mode requires input_gfa")
+    if args.mode in {"hybrid", "blast-only"} and not has_organelle_fasta:
+        parser.error(
+            f"{args.mode} mode requires at least one organelle FASTA input via --plastid-fasta or --mit-fasta"
+        )
+    if args.mode == "blast-only" and not has_contig_source:
+        parser.error("blast-only mode requires either input_gfa or --assembly-fasta")
+
+
 def merge_fasta_sequences(
     contigs: dict[str, dict[str, object]],
     fasta_contigs: dict[str, dict[str, object]],
+    *,
+    add_missing: bool = False,
 ) -> None:
     for contig_id, fasta_record in fasta_contigs.items():
         if contig_id not in contigs:
+            if add_missing:
+                contigs[contig_id] = dict(fasta_record)
             continue
         sequence_value = fasta_record.get("sequence", "")
         sequence = sequence_value if isinstance(sequence_value, str) else ""
@@ -363,6 +389,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.threads < 1:
         parser.error("--threads must be at least 1")
+    _validate_cli_inputs(args, parser)
     try:
         scoring_config, blast_config, nuclear_coverage, gc_baseline = config_from_args(args, parser)
     except ValueError as exc:
@@ -373,9 +400,17 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        contigs, graph = parse_gfa(args.input_gfa)
+        if args.input_gfa is not None:
+            contigs, graph = parse_gfa(args.input_gfa)
+        else:
+            contigs = {}
+            graph = None
         if args.assembly_fasta is not None:
-            merge_fasta_sequences(contigs, read_fasta(args.assembly_fasta))
+            merge_fasta_sequences(
+                contigs,
+                read_fasta(args.assembly_fasta),
+                add_missing=graph is None,
+            )
         plastid_blast_tsv = None
         mit_blast_tsv = None
         if args.mode in {"hybrid", "blast-only"} and (
@@ -384,6 +419,7 @@ def main() -> int:
             # Internal BLAST preserves the existing TSV-driven support code path.
             internal_blast_outputs = run_internal_blast(
                 assembly_fasta=args.assembly_fasta,
+                contigs=contigs,
                 plastid_fasta=args.plastid_fasta,
                 mit_fasta=args.mit_fasta,
                 output_dir=output_dir,
