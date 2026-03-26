@@ -20,7 +20,7 @@ This tool is intended for assemblies in which plastid- and mitochondrial-derived
 
 ## Overview
 
-Organelle Cleaner is designed to answer a practical question: which contigs in a nuclear assembly are likely derived from plastid/chloroplast or mitochondrial genomes rather than from the nuclear genome itself?
+OrganelleCleaner is designed to answer a practical question: which contigs in a nuclear assembly are likely derived from plastid/chloroplast or mitochondrial genomes rather than from the nuclear genome itself?
 
 Why this matters:
 
@@ -167,11 +167,11 @@ Important workflow rule:
 
 For best BLAST-based evidence, users are encouraged to provide high-quality organelle reference sequences, ideally assembled from the same sample or from a closely related accession.
 
-When HiFi data are available, a practical approach is to assemble plastid and mitochondrial genomes first and then use those assemblies as Organelle Cleaner references. HiMT is recommended for this purpose when suitable:
+When HiFi data are available, a practical approach is to assemble plastid and mitochondrial genomes first and then use those assemblies as OrganelleCleaner references. HiMT is recommended for this purpose when suitable:
 
-- HiMT: https://github.com/aiPGAB/HiMT
+- HiMT: https://github.com/NUSTM/HIMT
 
-This is a recommendation, not a requirement. Organelle Cleaner does not depend on HiMT directly.
+This is a recommendation, not a requirement. OrganelleCleaner does not depend on HiMT directly.
 
 ## How It Works
 
@@ -184,7 +184,7 @@ At a user level, the pipeline is:
    It summarizes graph structure and sequence-derived features such as contig length, GC content, and coverage.
 
 3. Optionally run internal BLAST.
-   If plastid and/or mitochondrial FASTA references are provided in `hybrid` or `blast-only` mode, Organelle Cleaner builds a BLAST nucleotide database from the available assembly contig sequences and runs `blastn` internally. It uses GFA sequence content when available and falls back to `--assembly-fasta` only when needed.
+   If plastid and/or mitochondrial FASTA references are provided in `hybrid` or `blast-only` mode, OrganelleCleaner builds a BLAST nucleotide database from the available assembly contig sequences and runs `blastn` internally. It uses GFA sequence content when available and falls back to `--assembly-fasta` only when needed.
 
 4. Classify BLAST support.
    BLAST hits are summarized per assembly contig, with overlapping or split HSPs merged on the subject contig before support coverage is measured.
@@ -361,7 +361,7 @@ Conceptually, these settings fall into a few groups:
 - `--nuclear-coverage`
 - `--gc-baseline`
 
-By default, Organelle Cleaner infers nuclear coverage baseline and GC baseline automatically from the input assembly. These options are overrides for cases where you already know the correct baseline and want to force it explicitly.
+By default, OrganelleCleaner infers nuclear coverage baseline and GC baseline automatically from the input assembly. These options are overrides for cases where you already know the correct baseline and want to force it explicitly.
 
 ### Graph confidence thresholds
 
