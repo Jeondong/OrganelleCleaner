@@ -169,7 +169,7 @@ For best BLAST-based evidence, users are encouraged to provide high-quality orga
 
 When HiFi data are available, a practical approach is to assemble plastid and mitochondrial genomes first and then use those assemblies as OrganelleCleaner references. HiMT is recommended for this purpose when suitable:
 
-- HiMT: https://github.com/NUSTM/HIMT
+- HiMT: https://github.com/tang-shuyuan/HiMT
 
 This is a recommendation, not a requirement. OrganelleCleaner does not depend on HiMT directly.
 
