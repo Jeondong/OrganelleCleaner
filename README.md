@@ -53,7 +53,7 @@ Main outputs:
 
 ## When to Use Each Mode
 
-### graph-only`
+### graph-only
 
 Uses:
 
@@ -81,7 +81,7 @@ Cons:
 
 - usually less sensitive than hybrid mode
   
-### blast-only`
+### blast-only
 
 Uses:
 
@@ -108,7 +108,7 @@ Cons:
 - generally less robust than hybrid mode for practical filtering
 
 
-### hybrid`
+### hybrid
 
 Uses:
 
