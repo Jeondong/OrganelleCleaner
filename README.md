@@ -80,6 +80,33 @@ Pros:
 Cons:
 
 - usually less sensitive than hybrid mode
+  
+### `blast-only`
+
+Uses:
+
+- internal BLAST evidence only
+
+Choose this when:
+
+- you want to evaluate BLAST evidence without graph-aware refinement
+- you want a simpler BLAST-based comparison run
+
+Requirements:
+
+- GFA required
+- assembly FASTA required
+- at least one of `--plastid-fasta` or `--mit-fasta`
+
+Pros:
+
+- useful for benchmarking or ablation-style comparisons
+
+Cons:
+
+- does not use graph context to refine calls
+- generally less robust than hybrid mode for practical filtering
+
 
 ### `hybrid`
 
@@ -106,32 +133,6 @@ Pros:
 Cons:
 
 - requires BLAST+ and suitable reference FASTA input
-
-### `blast-only`
-
-Uses:
-
-- internal BLAST evidence only
-
-Choose this when:
-
-- you want to evaluate BLAST evidence without graph-aware refinement
-- you want a simpler BLAST-based comparison run
-
-Requirements:
-
-- GFA required
-- assembly FASTA required
-- at least one of `--plastid-fasta` or `--mit-fasta`
-
-Pros:
-
-- useful for benchmarking or ablation-style comparisons
-
-Cons:
-
-- does not use graph context to refine calls
-- generally less robust than hybrid mode for practical filtering
 
 ## Inputs
 
