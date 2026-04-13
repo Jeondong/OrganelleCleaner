@@ -206,6 +206,7 @@ At a user level, the pipeline is:
 Create and activate the conda environment, then install the package in editable mode:
 
 ```bash
+git clone https://github.com/Jeondong/OrganelleCleaner.git
 conda env create -f environment.yml
 conda activate OrganelleCleaner
 pip install -e .
