@@ -1,6 +1,6 @@
 # OrganelleCleaner
 
-OrganelleCleaner identifies likely organelle-derived contigs in a nuclear genome assembly and writes a cleaned nuclear assembly after those contigs are removed. It uses assembly-graph structure, contig-level sequence features, and optional internal BLAST searches against plastid/chloroplast and mitochondrial reference sequences.
+OrganelleCleaner identifies likely organelle-derived contigs in a nuclear genome assembly and writes a cleaned nuclear assembly after those contigs are removed. 
 
 This tool is intended for assemblies in which plastid- and mitochondrial-derived contigs co-assemble with the nuclear genome and need to be screened before downstream analyses such as curation, scaffolding, assembly statistics, or release preparation.
 
