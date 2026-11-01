@@ -74,6 +74,8 @@ def test_run_internal_blast_uses_makeblastdb_then_blastn_with_cli_threads(
             str(resolved_work_dir / internal_blast.PLASTID_BLAST_TSV_NAME),
             "-num_threads",
             "65",
+            "-max_target_seqs",
+            "500",
             "-outfmt",
             internal_blast.BLAST_OUTFMT_FIELDS,
         ],
@@ -87,6 +89,8 @@ def test_run_internal_blast_uses_makeblastdb_then_blastn_with_cli_threads(
             str(resolved_work_dir / internal_blast.MITOCHONDRIAL_BLAST_TSV_NAME),
             "-num_threads",
             "65",
+            "-max_target_seqs",
+            "500",
             "-outfmt",
             internal_blast.BLAST_OUTFMT_FIELDS,
         ],
@@ -374,3 +378,42 @@ def test_missing_blast_executable_fails_clearly(monkeypatch: pytest.MonkeyPatch)
 
     with pytest.raises(ValueError, match="BLAST\\+ executables are required but were not found on PATH: blastn"):
         internal_blast.ensure_blast_executables_available()
+
+
+def test_run_internal_blast_raises_max_target_seqs_to_contig_count(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    assembly_fasta = tmp_path / "assembly.fa"
+    plastid_fasta = tmp_path / "plastid.fa"
+    assembly_fasta.write_text(
+        "".join(f">contig{i}\nACGT\n" for i in range(750)), encoding="utf-8"
+    )
+    plastid_fasta.write_text(">plastid_ref\nACGT\n", encoding="utf-8")
+
+    monkeypatch.setattr(internal_blast.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(
+        internal_blast.tempfile,
+        "TemporaryDirectory",
+        lambda prefix: _FakeTemporaryDirectory(tmp_path / "blast-work"),
+    )
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], check: bool, capture_output: bool, text: bool):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(internal_blast.subprocess, "run", fake_run)
+
+    internal_blast.run_internal_blast(
+        assembly_fasta=assembly_fasta,
+        contigs=None,
+        plastid_fasta=plastid_fasta,
+        mit_fasta=None,
+        output_dir=tmp_path / "out",
+        threads=1,
+    )
+
+    blastn_command = commands[1]
+    index = blastn_command.index("-max_target_seqs")
+    assert blastn_command[index + 1] == "750"

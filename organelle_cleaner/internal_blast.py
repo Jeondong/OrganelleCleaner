@@ -18,6 +18,10 @@ BLAST_DB_PREFIX_NAME = "assembly_blast_db"
 PLASTID_BLAST_TSV_NAME = "plastid_hits.tsv"
 MITOCHONDRIAL_BLAST_TSV_NAME = "mitochondrial_hits.tsv"
 GENERATED_SUBJECT_FASTA_NAME = "assembly_subject.fa"
+# blastn reports at most -max_target_seqs subjects per query (default 500). Contigs are the
+# subjects here, so the default silently drops support once more than 500 contigs match one
+# organelle reference sequence; raise the limit to the number of contigs in the database.
+DEFAULT_MAX_TARGET_SEQS = 500
 _BLAST_TEMP_DIRS: list[tempfile.TemporaryDirectory[str]] = []
 
 
@@ -70,6 +74,7 @@ def run_internal_blast(
     )
 
     _run_makeblastdb(assembly_fasta=subject_fasta, database_prefix=database_prefix)
+    max_target_seqs = max(DEFAULT_MAX_TARGET_SEQS, _count_fasta_records(subject_fasta))
 
     plastid_tsv = None
     mit_tsv = None
@@ -80,6 +85,7 @@ def run_internal_blast(
             database_prefix=database_prefix,
             output_tsv=plastid_tsv,
             threads=threads,
+            max_target_seqs=max_target_seqs,
         )
     if mit_fasta is not None:
         mit_tsv = intermediates_dir / MITOCHONDRIAL_BLAST_TSV_NAME
@@ -88,6 +94,7 @@ def run_internal_blast(
             database_prefix=database_prefix,
             output_tsv=mit_tsv,
             threads=threads,
+            max_target_seqs=max_target_seqs,
         )
 
     return InternalBlastOutputs(
@@ -133,6 +140,11 @@ def _write_subject_fasta_from_contigs(
     return written
 
 
+def _count_fasta_records(fasta: Path) -> int:
+    with fasta.open("r", encoding="utf-8") as handle:
+        return sum(1 for line in handle if line.startswith(">"))
+
+
 def _run_makeblastdb(*, assembly_fasta: Path, database_prefix: Path) -> None:
     _run_blast_command(
         [
@@ -153,6 +165,7 @@ def _run_blastn(
     database_prefix: Path,
     output_tsv: Path,
     threads: int,
+    max_target_seqs: int = DEFAULT_MAX_TARGET_SEQS,
 ) -> None:
     _run_blast_command(
         [
@@ -165,6 +178,8 @@ def _run_blastn(
             str(output_tsv),
             "-num_threads",
             str(threads),
+            "-max_target_seqs",
+            str(max_target_seqs),
             "-outfmt",
             BLAST_OUTFMT_FIELDS,
         ]
