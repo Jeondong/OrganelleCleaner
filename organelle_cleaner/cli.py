@@ -26,6 +26,7 @@ REPORT_NAME = "report.tsv"
 ORGANELLE_CONTIGS_NAME = "organelle_contigs.txt"
 NUCLEAR_CONTIGS_NAME = "nuclear_contigs.txt"
 CLEANED_ASSEMBLY_NAME = "cleaned_assembly.fa"
+ORGANELLE_ASSEMBLY_NAME = "organelle_assembly.fa"
 DEFAULT_CANDIDATE_REPORT_NAME = "organelle_candidates.tsv"
 FASTA_LINE_WIDTH = 80
 _ROW_BUILD_CONTEXT: tuple[
@@ -72,6 +73,29 @@ def write_fasta(path: Path, contigs: dict[str, dict[str, object]], contig_ids: l
             handle.write(f">{contig_id}\n")
             for line in _sequence_lines(sequence):
                 handle.write(f"{line}\n")
+
+
+def collect_classified_contig_ids(
+    report_rows: list[dict[str, object]],
+    *,
+    classification: str,
+    require_sequence: bool = True,
+) -> list[str]:
+    """Collect contig IDs for one output classification."""
+    contig_ids: list[str] = []
+    for row in report_rows:
+        if row.get("classification") != classification:
+            continue
+        contig_id = str(row["contig_id"])
+        if not require_sequence or bool(row.get("has_sequence")):
+            contig_ids.append(contig_id)
+            continue
+        print(
+            f"Contig {contig_id} is classified as {classification} but has no sequence; "
+            f"excluded from {classification} FASTA output",
+            file=sys.stderr,
+        )
+    return contig_ids
 
 
 def write_report(
@@ -453,29 +477,15 @@ def main() -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
-    organelle_ids = [
-        str(row["contig_id"])
-        for row in report_rows
-        if row.get("confidence_tier") == HIGH_CONFIDENCE
-    ]
+    organelle_ids = collect_classified_contig_ids(report_rows, classification="organelle")
     candidate_rows = [
         row for row in report_rows if row.get("confidence_tier") != "not_flagged"
     ]
-    nuclear_ids: list[str] = []
-    for row in report_rows:
-        if row.get("classification") != "nuclear":
-            continue
-        contig_id = str(row["contig_id"])
-        if bool(row.get("has_sequence")):
-            nuclear_ids.append(contig_id)
-            continue
-        print(
-            f"Contig {contig_id} is classified as nuclear but has no sequence; excluded from nuclear outputs",
-            file=sys.stderr,
-        )
+    nuclear_ids = collect_classified_contig_ids(report_rows, classification="nuclear")
 
     write_contig_id_list(output_dir / ORGANELLE_CONTIGS_NAME, organelle_ids)
     write_contig_id_list(output_dir / NUCLEAR_CONTIGS_NAME, nuclear_ids)
+    write_fasta(output_dir / ORGANELLE_ASSEMBLY_NAME, contigs, organelle_ids)
     write_fasta(output_dir / CLEANED_ASSEMBLY_NAME, contigs, nuclear_ids)
     write_report(output_dir / REPORT_NAME, report_rows)
     if args.all_candidates_name:

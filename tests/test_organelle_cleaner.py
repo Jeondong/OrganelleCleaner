@@ -68,18 +68,24 @@ def test_default_cli_invocation_succeeds_without_blast_and_keeps_outputs_consist
 
     assert result.returncode == 0, result.stderr
     assert (output_dir / "report.tsv").exists()
+    assert (output_dir / "organelle_contigs.txt").exists()
     assert (output_dir / "nuclear_contigs.txt").exists()
+    assert (output_dir / "organelle_assembly.fa").exists()
     assert (output_dir / "cleaned_assembly.fa").exists()
 
     report_rows = _read_report(output_dir / "report.tsv")
     report_by_id = {row["contig_id"]: row for row in report_rows}
+    organelle_fasta_ids = _read_fasta_ids(output_dir / "organelle_assembly.fa")
+    organelle_ids = _read_id_list(output_dir / "organelle_contigs.txt")
     fasta_ids = _read_fasta_ids(output_dir / "cleaned_assembly.fa")
     nuclear_ids = _read_id_list(output_dir / "nuclear_contigs.txt")
 
     assert report_by_id["missing_seq"]["has_sequence"] == "False"
     assert report_by_id["nuclear_a"]["mode"] == "graph-only"
+    assert organelle_fasta_ids == organelle_ids
     assert fasta_ids == nuclear_ids
     assert "missing_seq" not in fasta_ids
+    assert "missing_seq" not in organelle_fasta_ids
     assert "missing_seq" not in nuclear_ids
 
 
