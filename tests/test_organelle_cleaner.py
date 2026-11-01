@@ -259,3 +259,23 @@ def test_graph_only_ignores_organelle_fasta_without_requiring_internal_blast(tmp
     assert result.returncode == 0, result.stderr
     assert (output_dir / "report.tsv").exists()
     assert not (output_dir / "blast_intermediates").exists()
+
+
+def test_parse_gfa_reads_depth_from_assembler_specific_tags(tmp_path):
+    from organelle_cleaner.parse_gfa import parse_gfa
+
+    gfa_path = tmp_path / "depth.gfa"
+    gfa_path.write_text(
+        "S\trc\tACGT\tLN:i:4\tRC:i:40\n"
+        "S\thifiasm\tACGT\tLN:i:4\trd:i:35\n"
+        "S\tflye\tACGT\tLN:i:4\tdp:f:12.5\n"
+        "S\tkmer\tACGT\tLN:i:4\tKC:i:20\n"
+        "S\tnone\tACGT\tLN:i:4\n",
+        encoding="utf-8",
+    )
+    contigs, _ = parse_gfa(gfa_path)
+    assert contigs["rc"]["coverage"] == 10.0
+    assert contigs["hifiasm"]["coverage"] == 35.0
+    assert contigs["flye"]["coverage"] == 12.5
+    assert contigs["kmer"]["coverage"] == 5.0
+    assert contigs["none"]["coverage"] is None

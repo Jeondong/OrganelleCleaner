@@ -51,6 +51,29 @@ def parse_tags(fields: list[str], line_number: int, line: str) -> dict[str, obje
     return tags
 
 
+def segment_coverage(tags: dict[str, object], length_tag: object) -> float | None:
+    """Return a per-segment depth estimate from the first supported GFA tag.
+
+    Assemblers report depth with different tags, so they are tried in order:
+    RC:i (read/base count, divided by LN), rd:i (hifiasm read depth),
+    dp:f / DP:f (direct depth, e.g. Flye), KC:i (k-mer count, divided by LN).
+    Only relative values matter because coverage is compared to a nuclear
+    baseline estimated from the same graph.
+    """
+    has_length = isinstance(length_tag, int) and length_tag > 0
+    read_count = tags.get("RC")
+    if has_length and isinstance(read_count, int):
+        return read_count / length_tag
+    for key in ("rd", "dp", "DP"):
+        depth = tags.get(key)
+        if isinstance(depth, (int, float)) and not isinstance(depth, bool):
+            return float(depth)
+    kmer_count = tags.get("KC")
+    if has_length and isinstance(kmer_count, int):
+        return kmer_count / length_tag
+    return None
+
+
 def parse_gfa(gfa_path: Path) -> tuple[dict[str, dict[str, object]], nx.MultiDiGraph]:
     contigs: dict[str, dict[str, object]] = {}
     graph = nx.MultiDiGraph()
@@ -87,12 +110,7 @@ def parse_gfa(gfa_path: Path) -> tuple[dict[str, dict[str, object]], nx.MultiDiG
                 if not isinstance(length, int):
                     length = len(sequence)
 
-                read_count = tags.get("RC")
-                # Coverage is approximated as RC / length and may differ from true depth.
-                if isinstance(length_tag, int) and length_tag > 0 and isinstance(read_count, int):
-                    coverage = read_count / length_tag
-                else:
-                    coverage = None
+                coverage = segment_coverage(tags, length_tag)
 
                 contig_data = {
                     "name": name,
