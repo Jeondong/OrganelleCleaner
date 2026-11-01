@@ -20,6 +20,7 @@ from .organelle_scoring import (
 )
 from .parse_gfa import parse_gfa
 from .sequence_features import calculate_contig_features, read_fasta
+from .unitig import apply_unitig_rules
 
 
 REPORT_NAME = "report.tsv"
@@ -151,6 +152,10 @@ def write_report(
         "supporting_evidence",
         "penalty_reasons",
         "decision_explanation",
+        "utg_used",
+        "iso_frac",
+        "utg_max_len",
+        "utg_rule",
     ]
 
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -342,6 +347,16 @@ def build_parser() -> argparse.ArgumentParser:
         help=argparse.SUPPRESS,
     )
     basic_io_group.add_argument(
+        "--utg-gfa",
+        type=Path,
+        default=None,
+        help=(
+            "Optional hifiasm unitig graph (p_utg.gfa, or r_utg.gfa if p_utg is absent) for the same assembly. "
+            "When given, graph-only and hybrid classify contigs with the unitig-isolation rules "
+            "(contig reads matched to unitigs via GFA A-lines)."
+        ),
+    )
+    basic_io_group.add_argument(
         "-o",
         "--output-dir",
         dest="output_dir",
@@ -387,6 +402,8 @@ def _validate_cli_inputs(
         )
     if args.mode == "blast-only" and not has_contig_source:
         parser.error("blast-only mode requires either input_gfa or --assembly-fasta")
+    if args.utg_gfa is not None and args.mode == "blast-only":
+        parser.error("--utg-gfa applies to graph-only and hybrid modes only")
 
 
 def merge_fasta_sequences(
@@ -477,6 +494,22 @@ def main() -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
+    if args.utg_gfa is not None:
+        try:
+            apply_unitig_rules(
+                report_rows,
+                mode=args.mode,
+                contig_gfa=args.input_gfa,
+                utg_gfa=args.utg_gfa,
+                blast_tsvs=[plastid_blast_tsv, mit_blast_tsv],
+                reference_fastas=[args.plastid_fasta, args.mit_fasta],
+            )
+        except FileNotFoundError:
+            print(f"Unitig GFA not found: {args.utg_gfa}", file=sys.stderr)
+            return 1
+    else:
+        for row in report_rows:
+            row["utg_used"] = False
     organelle_ids = collect_classified_contig_ids(report_rows, classification="organelle")
     candidate_rows = [
         row for row in report_rows if row.get("confidence_tier") != "not_flagged"

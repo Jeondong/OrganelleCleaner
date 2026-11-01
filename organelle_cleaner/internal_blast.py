@@ -11,7 +11,7 @@ import tempfile
 
 
 BLAST_OUTFMT_FIELDS = (
-    "6 qseqid sseqid pident length slen mismatch gapopen qstart qend sstart send"
+    "6 qseqid sseqid pident length slen mismatch gapopen qstart qend sstart send evalue"
 )
 BLAST_INTERMEDIATES_DIRNAME = "blast_intermediates"
 BLAST_DB_PREFIX_NAME = "assembly_blast_db"
