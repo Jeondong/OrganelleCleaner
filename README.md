@@ -12,6 +12,7 @@ This tool is intended for assemblies in which plastid- and mitochondrial-derived
 - [Recommended organelle reference generation](#recommended-organelle-reference-generation)
 - [How it works](#how-it-works)
 - [Installation](#installation)
+- [Unitig-isolation rules (`--utg-gfa`)](#unitig-isolation-rules---utg-gfa)
 - [Usage examples](#usage-examples)
 - [Outputs](#outputs)
 - [BLAST support policy](#blast-support-policy)
@@ -142,6 +143,9 @@ Cons:
 ### Optional but often useful
 
 - organelle reference FASTA via `--plastid-fasta` and/or `--mit-fasta`
+- hifiasm unitig graph via `--utg-gfa` (`*.p_utg.gfa`, or `*.r_utg.gfa` if `p_utg` is absent) for the unitig-isolation rules; recommended for hifiasm assemblies
+
+Recommended sequencing depth: at least 20x HiFi nuclear depth. Contig depth is read from the assembler's GFA tags (`RC:i`, hifiasm `rd:i`, `dp`/`DP` as written by e.g. Flye, or `KC:i`); the unitig-isolation rules do not use depth.
 
 Advanced fallback note:
 If the GFA does not contain usable contig sequences, you can still provide `--assembly-fasta`. Most users do not need this because GFA sequence content can be used directly for internal BLAST subject preparation.
@@ -212,6 +216,29 @@ Requirements:
 - Python 3.11 in the provided conda environment
 - `networkx`
 - BLAST+ tools: `makeblastdb` and `blastn`
+
+## Unitig-isolation rules (`--utg-gfa`)
+
+For hifiasm assemblies, pass the unitig graph of the same run with `--utg-gfa`. Contigs are then classified with the unitig-isolation rules instead of the size-bin confidence tiers. Each contig's reads are matched to unitigs through the GFA `A` lines, and `iso_frac` is the fraction of the contig's unitigs that sit in graph components isolated from the rest of the assembly.
+
+- `hybrid`: organelle if
+  - strong BLAST support: an HSP with identity >= 80% covering >= 20% of the contig (no length limit), or
+  - weak BLAST support (identity >= 80%, alignment >= 500 bp) AND `iso_frac >= 0.5` AND length <= L
+- `graph-only`: organelle if `iso_frac >= 0.5` AND length <= L
+- HSPs with e-value > 1e-20 are ignored.
+- L = min(2 x the total length of the longest organelle reference FASTA, 2 Mb); 2 Mb when no reference is given. The 2 Mb ceiling keeps references with very large mitogenomes from admitting multi-megabase nuclear contigs on weak evidence.
+
+`report.tsv` gains `utg_used`, `iso_frac`, `utg_max_len` and `utg_rule` (`strong_blast`, `weak_blast+isolated_unitigs` or `isolated_unitigs`). `--utg-gfa` is not available in `blast-only` mode.
+
+```bash
+organelle-cleaner sample.asm.bp.p_ctg.gfa \
+  --utg-gfa sample.asm.bp.p_utg.gfa \
+  --plastid-fasta plastid.fa \
+  --mit-fasta mit.fa \
+  --mode hybrid \
+  --output-dir results \
+  --threads 8
+```
 
 ## Usage Examples
 
@@ -412,6 +439,7 @@ Organelle-derived contig detection is evidence-based, not perfect. Results shoul
 Practical guidance:
 
 - `hybrid` mode is generally recommended when organelle reference FASTA sequences are available
+- for hifiasm assemblies, add `--utg-gfa` with the unitig graph of the same run
 - `graph-only` remains useful when BLAST references are unavailable
 - `blast-only` is mainly useful for comparison, benchmarking, or simpler BLAST-focused runs
 

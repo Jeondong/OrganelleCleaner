@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "OrganelleCleaner"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = ["networkx"]
 
 [project.scripts]
