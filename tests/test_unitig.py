@@ -59,13 +59,16 @@ def test_iso_frac_counts_reads_in_degree_zero_unitigs(tmp_path):
     assert iso["big_ctg"] == 1.0
 
 
-def test_max_len_is_twice_longest_reference_or_two_megabases(tmp_path):
+def test_max_len_is_twice_longest_reference_capped_at_two_megabases(tmp_path):
     plastid = tmp_path / "pt.fa"
     mit = tmp_path / "mt.fa"
     plastid.write_text(">pt\n" + "A" * 150 + "\n", encoding="utf-8")
     mit.write_text(">mt_a\n" + "C" * 300 + "\n>mt_b\n" + "G" * 100 + "\n", encoding="utf-8")
     assert unitig.max_contig_length([plastid, mit]) == 800
     assert unitig.max_contig_length([None, None]) == 2_000_000
+    big_mit = tmp_path / "big_mt.fa"
+    big_mit.write_text(">mt\n" + "A" * 1_500_000 + "\n", encoding="utf-8")
+    assert unitig.max_contig_length([plastid, big_mit]) == 2_000_000
 
 
 def test_decide_applies_length_cap_and_blast_evidence():

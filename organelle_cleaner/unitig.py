@@ -12,7 +12,9 @@ Decision rules used when --utg-gfa is given (thresholds fixed in advance):
     graph-only: iso_frac >= 0.5 AND length <= max_len
 where a strong hit is identity >= 80 and per-HSP contig coverage >= 0.20, a weak
 hit is identity >= 80 and alignment length >= 500 (both with e-value <= 1e-20),
-and max_len = 2 x the longest organelle reference genome (2 x 1 Mb without references).
+and max_len = min(2 x the longest organelle reference genome, 2 Mb); 2 Mb without references.
+The 2 Mb ceiling keeps a reference with a very large mitogenome (e.g. Amborella,
+3.9 Mb) from admitting multi-megabase nuclear contigs through the weak rule.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ WEAK_MIN_ALIGNMENT_LENGTH = 500
 MAX_EVALUE = 1e-20
 MAX_LEN_REFERENCE_MULTIPLIER = 2
 DEFAULT_REFERENCE_GENOME_LENGTH = 1_000_000
+MAX_LEN_CEILING = 2_000_000
 
 RULE_STRONG_BLAST = "strong_blast"
 RULE_WEAK_BLAST_ISOLATED = "weak_blast+isolated_unitigs"
@@ -102,7 +105,7 @@ def max_contig_length(reference_fastas: list[Path | None]) -> int:
     longest = max((reference_genome_length(path) for path in reference_fastas), default=0)
     if longest <= 0:
         longest = DEFAULT_REFERENCE_GENOME_LENGTH
-    return MAX_LEN_REFERENCE_MULTIPLIER * longest
+    return min(MAX_LEN_REFERENCE_MULTIPLIER * longest, MAX_LEN_CEILING)
 
 
 def read_blast_evidence(blast_tsvs: list[Path | None]) -> dict[str, BlastEvidence]:
