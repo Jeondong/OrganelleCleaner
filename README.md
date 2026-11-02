@@ -98,9 +98,9 @@ Choose this when:
 
 Requirements:
 
-- GFA required
+- GFA or `--assembly-fasta` (either one)
 - at least one of `--plastid-fasta` or `--mit-fasta`
-- `--assembly-fasta` is only needed if the GFA does not contain usable contig sequences
+- `--assembly-fasta` is only needed if no GFA is given or the GFA does not contain usable contig sequences
 
 Pros:
 
@@ -229,7 +229,7 @@ Requirements:
 
 ## Unitig-isolation rules (`--utg-gfa`)
 
-For hifiasm assemblies, pass the unitig graph of the same run with `--utg-gfa`. Contigs are then classified with the unitig-isolation rules instead of the size-bin confidence tiers. EEach contig's reads are matched to unitigs through the GFA `A` lines, and `iso_frac` is the fraction of the contig's reads that lie in unitigs with no links (degree 0) in the unitig graph.
+For hifiasm assemblies, pass the unitig graph of the same run with `--utg-gfa`. Contigs are then classified with the unitig-isolation rules instead of the size-bin confidence tiers. Each contig's reads are matched to unitigs through the GFA `A` lines, and `iso_frac` is the fraction of the contig's reads that lie in unitigs with no links (degree 0) in the unitig graph.
 
 - `hybrid`: organelle if
   - strong BLAST support: an HSP with identity >= 80% covering >= 20% of the contig (no length limit), or
